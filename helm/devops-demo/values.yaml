@@ -8,7 +8,7 @@ image:
   repository: ghcr.io/snehaperampalli/devops-cicd-project
   # CI tags every image with the commit SHA. "latest" is only for the first deploy;
   # in the GitOps phase the pipeline writes the real commit SHA here.
-  tag: latest
+  tag: 0ea6b3ce1117006485ae11c08fbfb067a3a8e64e
   pullPolicy: IfNotPresent
 
 # Port the app listens on inside the container.
