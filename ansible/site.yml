@@ -1,0 +1,131 @@
+---
+# Phase 3: turn a fresh Ubuntu machine into a Docker + k3s host.
+#
+# Run from this folder, as your normal user (NOT with sudo):
+#   ansible-playbook site.yml --ask-become-pass
+#
+# The playbook is idempotent: running it again only changes what is missing.
+- name: Prepare Ubuntu host (Docker, swap, k3s)
+  hosts: local
+  become: true
+
+  vars:
+    # The normal user who invoked ansible-playbook (looked up on the controller).
+    target_user: "{{ lookup('env', 'USER') }}"
+    target_home: "/home/{{ lookup('env', 'USER') }}"
+    # Safety net for small VMs. Skipped automatically if swap already exists.
+    swap_size_gb: 2
+    # Empty = latest stable k3s. For a reproducible setup pin a version,
+    # e.g. "v1.xx.y+k3s1" (see https://github.com/k3s-io/k3s/releases).
+    k3s_version: ""
+
+  pre_tasks:
+    - name: Refuse to run as root
+      ansible.builtin.assert:
+        that:
+          - target_user != 'root'
+        fail_msg: >-
+          Run this as your normal user, not with sudo:
+          ansible-playbook site.yml --ask-become-pass
+
+  tasks:
+    # ---------- Docker ----------
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+          - docker.io
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Enable and start Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Let the normal user run docker without sudo
+      ansible.builtin.user:
+        name: "{{ target_user }}"
+        groups: docker
+        append: true
+
+    # ---------- Swap (only if the machine has none) ----------
+    - name: Create and enable a swap file
+      when: ansible_swaptotal_mb | int == 0
+      block:
+        - name: Allocate swap file
+          ansible.builtin.command: "fallocate -l {{ swap_size_gb }}G /swapfile"
+          args:
+            creates: /swapfile
+          register: swapfile_created
+
+        - name: Restrict swap file permissions
+          ansible.builtin.file:
+            path: /swapfile
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Format swap file
+          ansible.builtin.command: mkswap /swapfile
+          when: swapfile_created is changed
+
+        - name: Enable swap now
+          ansible.builtin.command: swapon /swapfile
+          when: swapfile_created is changed
+
+        - name: Keep swap enabled after reboot
+          ansible.builtin.lineinfile:
+            path: /etc/fstab
+            line: "/swapfile none swap sw 0 0"
+            state: present
+
+    # ---------- k3s (lightweight Kubernetes) ----------
+    - name: Install k3s
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -sfL https://get.k3s.io | sh -
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/k3s
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version }}"
+
+    - name: Wait for the node to become Ready
+      ansible.builtin.command: k3s kubectl wait --for=condition=Ready node --all --timeout=60s
+      register: node_ready
+      retries: 6
+      delay: 10
+      until: node_ready.rc == 0
+      changed_when: false
+
+    # ---------- kubectl access for the normal user ----------
+    - name: Create ~/.kube for the normal user
+      ansible.builtin.file:
+        path: "{{ target_home }}/.kube"
+        state: directory
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        mode: "0700"
+
+    - name: Copy kubeconfig so kubectl works without sudo
+      ansible.builtin.copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "{{ target_home }}/.kube/config"
+        remote_src: true
+        owner: "{{ target_user }}"
+        group: "{{ target_user }}"
+        mode: "0600"
+
+    - name: Show cluster nodes
+      ansible.builtin.command: k3s kubectl get nodes -o wide
+      register: nodes_out
+      changed_when: false
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ nodes_out.stdout_lines }}"
