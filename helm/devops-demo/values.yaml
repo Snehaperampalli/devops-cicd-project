@@ -1,0 +1,43 @@
+# Default values for the devops-demo chart.
+# Override any of these with --set or a custom values file.
+
+# Two replicas let you demo zero-downtime rolling updates.
+replicaCount: 2
+
+image:
+  repository: ghcr.io/snehaperampalli/devops-cicd-project
+  # CI tags every image with the commit SHA. "latest" is only for the first deploy;
+  # in the GitOps phase the pipeline writes the real commit SHA here.
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Port the app listens on inside the container.
+containerPort: 8080
+
+# Extra plain-text settings, added to the ConfigMap as environment variables.
+# Do NOT put passwords or tokens here (this file is in Git).
+config: {}
+#  LOG_LEVEL: info
+
+# Name of an existing Kubernetes Secret to load as environment variables.
+# Create it by hand (kubectl create secret generic ...), never commit it to Git.
+existingSecret: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+# k3s ships with the Traefik ingress controller.
+ingress:
+  enabled: true
+  className: traefik
+  host: devops-demo.local
+
+# Small values, sized for a 4 GB single-node VM.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

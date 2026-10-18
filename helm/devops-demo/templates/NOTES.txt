@@ -1,0 +1,13 @@
+devops-demo is deployed in namespace "{{ .Release.Namespace }}".
+
+Check the pods:
+  kubectl -n {{ .Release.Namespace }} get pods
+
+Quick test with port-forward:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "devops-demo.fullname" . }} 8081:{{ .Values.service.port }}
+  curl localhost:8081/health
+{{- if .Values.ingress.enabled }}
+
+Through the ingress (Traefik on k3s):
+  curl -H "Host: {{ .Values.ingress.host }}" http://localhost/health
+{{- end }}
