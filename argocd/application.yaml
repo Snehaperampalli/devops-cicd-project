@@ -1,0 +1,24 @@
+# Tells Argo CD: "keep the cluster in sync with the Helm chart in this Git repo."
+# Apply it once with: kubectl apply -f argocd/application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devops-demo
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Snehaperampalli/devops-cicd-project.git
+    targetRevision: main
+    path: helm/devops-demo
+    helm:
+      releaseName: devops-demo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true      # delete cluster resources that were removed from Git
+      selfHeal: true   # undo manual changes made directly in the cluster
+    syncOptions:
+      - CreateNamespace=true

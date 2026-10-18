@@ -3,6 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    # Chart, playbook and docs changes do not need a new image.
+    paths-ignore:
+      - "helm/**"
+      - "ansible/**"
+      - "argocd/**"
+      - "**.md"
   pull_request:
     branches: [main]
 
@@ -90,3 +96,40 @@ jobs:
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:latest
           cache-from: type=gha
+
+  # GitOps step: record the new image tag in Git. Argo CD watches this file
+  # and deploys the change to the cluster, so nobody runs kubectl or helm.
+  update-gitops:
+    name: Update image tag in Git
+    needs: build-scan-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: gitops-update
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Point the Helm chart at the new image
+        run: |
+          sed -i "s|^  tag: .*|  tag: ${GITHUB_SHA}|" helm/devops-demo/values.yaml
+          git diff --stat
+
+      # Commits made with the built-in GITHUB_TOKEN do not start new workflow
+      # runs, so this cannot trigger an endless CI loop.
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add helm/devops-demo/values.yaml
+          if git diff --cached --quiet; then
+            echo "Image tag already up to date"
+            exit 0
+          fi
+          git commit -m "ci: deploy image ${GITHUB_SHA::7} [skip ci]"
+          git pull --rebase origin main
+          git push origin main
