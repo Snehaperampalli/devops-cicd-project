@@ -1,0 +1,35 @@
+groups:
+  - name: devops-demo
+    rules:
+      # More than 5% of requests failing with a 5xx status for 1 minute.
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="devops-demo",status=~"5.."}[2m]))
+            /
+          sum(rate(http_requests_total{job="devops-demo"}[2m])) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate on devops-demo"
+          description: "More than 5% of requests are failing (value: {{ $value | humanizePercentage }})."
+
+      # One pod stopped answering the metrics scrape.
+      - alert: AppPodDown
+        expr: up{job="devops-demo"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A devops-demo pod is down"
+          description: "Pod {{ $labels.pod }} has not answered Prometheus for 1 minute."
+
+      # No healthy pod at all.
+      - alert: AppDown
+        expr: absent(up{job="devops-demo"} == 1)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "devops-demo has no healthy pods"
+          description: "Prometheus cannot see any running devops-demo pod."

@@ -1,0 +1,22 @@
+# Second Argo CD application: deploys Prometheus and Grafana from the monitoring/ folder.
+# Apply it once with: kubectl apply -f argocd/monitoring-application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Snehaperampalli/devops-cicd-project.git
+    targetRevision: main
+    path: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

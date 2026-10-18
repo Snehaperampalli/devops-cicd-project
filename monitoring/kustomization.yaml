@@ -1,0 +1,27 @@
+# Kustomize turns these plain files into one deployable bundle.
+# ConfigMaps are generated from the files in config/. Kustomize adds a hash to
+# each ConfigMap name, so editing a config file automatically restarts the pod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+resources:
+  - rbac.yaml
+  - prometheus.yaml
+  - grafana.yaml
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml=config/prometheus.yml
+      - alerts.yml=config/alerts.yml
+  - name: grafana-datasources
+    files:
+      - datasources.yaml=config/grafana-datasources.yaml
+  - name: grafana-dashboard-provider
+    files:
+      - dashboards.yaml=config/grafana-dashboard-provider.yaml
+  - name: grafana-dashboards
+    files:
+      - devops-demo.json=config/devops-demo-dashboard.json

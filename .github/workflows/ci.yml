@@ -8,6 +8,7 @@ on:
       - "helm/**"
       - "ansible/**"
       - "argocd/**"
+      - "monitoring/**"
       - "**.md"
   pull_request:
     branches: [main]
